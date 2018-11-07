@@ -5,28 +5,12 @@
 #include <cstddef>
 #include <array>
 #include <vector>
-#include <H5Cpp.h>
+#include <hdf5.h>
 #include <alps/params.hpp>
 #include <alps/utilities/mpi.hpp>
 
-H5::H5File open_file(const alps::mpi::communicator& comm, const std::string& fname, int root)
-{
-    using namespace H5;
-    bool is_root=comm.rank()==root;
-    if (is_root) {
-        H5File fd(fname, H5F_ACC_TRUNC);
-        comm.barrier();
-        return fd;
-    } else {
-        comm.barrier();
-        H5File fd(fname, H5F_ACC_RDWR);
-        return fd;
-    }
-}
-
 int main(int argc, char** argv)
 {
-    using namespace H5;
     using std::string;
     using std::size_t;
     using std::cerr;
@@ -54,25 +38,51 @@ int main(int argc, char** argv)
 
     // TODO: fill the data with random numbers
 
+    // make the file-access property
+    auto plist_id=H5Pcreate(H5P_FILE_ACCESS);
+    // set this property to parallel access:
+    //  1) not collective
+    //  2) `comm` is duplicated and remembered
+    //  3) `info` object is duplicated
+    H5Pset_fapl_mpio(plist_id, comm, MPI_INFO_NULL);
 
-    // make the dataspace
+    // make the file (collectively!)
+    string fname=par["file"].as<string>();
+    auto file_id = H5Fcreate(fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+
+
+    // make the dataspace: 1D array of dimension datasize
     std::array<hsize_t,1> dims={datasize};
-    DataSpace dataspace(dims.size(), dims.data());
+    auto dataspace_id=H5Screate_simple(dims.size(), dims.data(), nullptr);
 
-    // make the datatype
-    FloatType datatype(PredType::IEEE_F64LE);
-    // datatype.setOrder( H5T_ORDER_LE );
+    // make dataset: in this file, with this name, IEEE 64-bit FP, little-endian,
+    //               of the dimensions specified by the dataspace
+    string dname=par["name"].as<string>();
+    auto dataset_id = H5Dcreate2(file_id, dname.c_str(), H5T_IEEE_F64LE, dataspace_id,
+                                 H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
-    // dataset name
-    string dname=par["name"].as<string>()+std::to_string(comm.rank());
 
-    // make the file
-    H5File file=open_file(comm, par["file"].as<string>(), master);
+    // make the data-transfer property
+    auto plist_xfer_id=H5Pcreate(H5P_DATASET_XFER);
+    // set this property to independent or collective IO
+    const auto mode=H5FD_MPIO_INDEPENDENT /* H5FD_MPIO_COLLECTIVE */;
+    H5Pset_dxpl_mpio(plist_xfer_id, mode);
 
-    DataSet dataset = file.createDataSet(dname, datatype, dataspace);
+    // write into the dataset:
+    //   from the whole `double` array to the whole dataset,
+    //   using the specified transfer mode (collective or independent)
+    // FIXME: each rank writes into the same space!
+    auto status=H5Dwrite(dataset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, plist_xfer_id, data.data());
 
-    // write the dataset
-    dataset.write(data.data(), PredType::IEEE_F64LE);
+    if (status < 0) {
+        cerr << "HDF5 error has occurred on rank " << comm.rank() << endl;
+    }
 
+    // free the resources:
+    H5Pclose(plist_xfer_id);
+    H5Dclose(dataset_id);
+    H5Sclose(dataspace_id);
+    H5Fclose(file_id);
+    H5Pclose(plist_id);
     return 0;
 }

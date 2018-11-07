@@ -1,7 +1,12 @@
 project(H5Benchmark C CXX)
 cmake_minimum_required(VERSION 3.1)
 
-find_package(HDF5 REQUIRED CXX)
+set(HDF5_PREFER_PARALLEL true)
+find_package(HDF5 REQUIRED C)
+if (NOT HDF5_IS_PARALLEL)
+  message(FATAL_ERROR "This package requires parallel HDF5")
+endif()
+
 find_package(ALPSCore REQUIRED params)
 
 add_library(mydeps INTERFACE)
