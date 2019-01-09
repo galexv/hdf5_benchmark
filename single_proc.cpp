@@ -5,7 +5,9 @@
 #include <cstddef>
 #include <array>
 #include <vector>
-#include <hdf5.h>
+
+#include "h5_cxx_interface.hpp"
+
 #include <alps/params.hpp>
 
 
@@ -34,17 +36,17 @@ int main(int argc, char** argv)
 
     // make the file
     string fname=par["file"].as<string>();
-    auto file_id = H5Fcreate(fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+    h5::fd_wrapper file_id{ H5Fcreate(fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT) };
 
     // make the dataspace: 1D array of dimension datasize
     std::array<hsize_t,1> dims={datasize};
-    auto dataspace_id=H5Screate_simple(dims.size(), dims.data(), nullptr);
+    h5::dspace_wrapper dataspace_id{ H5Screate_simple(dims.size(), dims.data(), nullptr) };
 
     // make dataset: in this file, with this name, IEEE 64-bit FP, little-endian,
     //               of the dimensions specified by the dataspace
     string dname=par["name"].as<string>();
-    auto dataset_id = H5Dcreate2(file_id, dname.c_str(), H5T_IEEE_F64LE, dataspace_id,
-                                 H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    h5::dset_wrapper dataset_id{ H5Dcreate2(file_id, dname.c_str(), H5T_IEEE_F64LE, dataspace_id,
+                                            H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) };
 
     // write into the dataset: from the whole `double` array to the whole dataset
     auto status=H5Dwrite(dataset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, data.data());
@@ -52,11 +54,6 @@ int main(int argc, char** argv)
     if (status < 0) {
         cerr << "HDF5 error has occurred\n";
     }
-
-    // free the resources:
-    H5Dclose(dataset_id);
-    H5Sclose(dataspace_id);
-    H5Fclose(file_id);
 
     return 0;
 }
