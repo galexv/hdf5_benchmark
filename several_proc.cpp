@@ -25,16 +25,20 @@ int main(int argc, char** argv)
 
 
     alps::params par(argc, argv, comm);
-    par.define<string>("file", "File name to create").
-        define<size_t>("size", "Data size (MB)").
-        define<string>("name", "double_set", "Data set name");
+    par
+        .define<string>("file", "File name to create")
+        .define<size_t>("size", "Data size (MB)")
+        .define<string>("name", "double_set", "Data set name")
+        .define("collective", "Whether to use collective write")
+        ;
 
     if (par.help_requested(cerr) || par.has_missing(cerr)) {
         return 1;
     }
 
+    const bool do_collective=par["collective"];
     hsize_t datasize=par["size"].as<size_t>()*1024*1024/sizeof(double);
-    dvec_t data(datasize);
+    dvec_t data(datasize, comm.rank());
 
     // TODO: fill the data with random numbers
 
@@ -55,24 +59,30 @@ int main(int argc, char** argv)
     std::array<hsize_t,1> dims={datasize};
     auto dataspace_id=H5Screate_simple(dims.size(), dims.data(), nullptr);
 
-    // make dataset: in this file, with this name, IEEE 64-bit FP, little-endian,
-    //               of the dimensions specified by the dataspace
-    string dname=par["name"].as<string>();
-    auto dataset_id = H5Dcreate2(file_id, dname.c_str(), H5T_IEEE_F64LE, dataspace_id,
-                                 H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
 
+    // make datasets: in this file, with this name, IEEE 64-bit FP, little-endian,
+    //                of the dimensions specified by the dataspace
+    // caveat: all processes must make all datasets
+    size_t nsets=comm.size();
+    std::vector<hid_t> dsets(nsets);
+    for (size_t i=0; i<nsets; ++i) {
+        string dname=par["name"].as<string>()+std::to_string(i);
+        dsets[i] = H5Dcreate2(file_id, dname.c_str(), H5T_IEEE_F64LE, dataspace_id,
+                              H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        // cerr << "Rank " << comm.rank() << ": dsets[" << i << "]=" << dsets[i] << endl;
+        if (dsets[i]==-1) env.abort(1);
+    }
 
     // make the data-transfer property
     auto plist_xfer_id=H5Pcreate(H5P_DATASET_XFER);
     // set this property to independent or collective IO
-    const auto mode=H5FD_MPIO_INDEPENDENT /* H5FD_MPIO_COLLECTIVE */;
+    const auto mode = do_collective? H5FD_MPIO_COLLECTIVE : H5FD_MPIO_INDEPENDENT;
     H5Pset_dxpl_mpio(plist_xfer_id, mode);
 
     // write into the dataset:
     //   from the whole `double` array to the whole dataset,
     //   using the specified transfer mode (collective or independent)
-    // FIXME: each rank writes into the same space!
-    auto status=H5Dwrite(dataset_id, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, plist_xfer_id, data.data());
+    auto status=H5Dwrite(dsets[comm.rank()], H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, plist_xfer_id, data.data());
 
     if (status < 0) {
         cerr << "HDF5 error has occurred on rank " << comm.rank() << endl;
@@ -80,7 +90,9 @@ int main(int argc, char** argv)
 
     // free the resources:
     H5Pclose(plist_xfer_id);
-    H5Dclose(dataset_id);
+    for (auto id : dsets) {
+        H5Dclose(id);
+    }
     H5Sclose(dataspace_id);
     H5Fclose(file_id);
     H5Pclose(plist_id);
