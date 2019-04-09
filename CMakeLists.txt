@@ -18,3 +18,6 @@ target_link_libraries(single_proc mydeps)
 
 add_executable(several_proc several_proc.cpp)
 target_link_libraries(several_proc mydeps)
+
+add_executable(several_proc_rows several_proc_rows.cpp)
+target_link_libraries(several_proc_rows mydeps)
