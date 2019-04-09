@@ -19,16 +19,19 @@ namespace h5 {
             typedef void (*deleter_type)(const h5_id_type*);
             typedef std::unique_ptr<H5T,deleter_type> keeper_type;
 
-            static void call_closer(const h5_id_type* id_ptr) noexcept {
-                auto id=*id_ptr;
+            static void close_(h5_id_type id) {
                 if (id<0) return;
                 auto err=CLOSER_F(id);
                 // std::cerr << "DEBUG: resource with id=" << id << " destroyed, err=" << err << "\n";
                 if (err<0) {
-                    // FIXME: this simply calls std::terminate() right away:
                     throw std::runtime_error("Error freeing an HDF5 resource");
                 }
             }
+
+            static void call_closer(const h5_id_type* id_ptr) noexcept {
+                close_(*id_ptr); // on exception, calls std::terminate() right away
+            }
+
             h5_id_type id_;
             keeper_type keeper_;
 
@@ -44,12 +47,21 @@ namespace h5 {
 
             operator h5_id_type() const {
                 // std::cerr << "DEBUG: resource with id=" << id_ << " accessed\n";
+                if (id_<0) {
+                    throw std::runtime_error("Attempt to re-use deallocated HDF5 resource");
+                }
                 return id_;
+            }
+
+            void close() {
+                auto old_id=id_;
+                id_=-1; // the resource is marked "closed" even if closing fails (FIXME?)
+                close_(old_id);
             }
         };
     }
     using fd_wrapper=detail::wrapper_helper<hid_t, H5Fclose>;
     using dspace_wrapper=detail::wrapper_helper<hid_t, H5Sclose>;
     using dset_wrapper=detail::wrapper_helper<hid_t, H5Dclose>;
-
+    using plist_wrapper=detail::wrapper_helper<hid_t, H5Pclose>;
 }
