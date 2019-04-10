@@ -64,4 +64,8 @@ namespace h5 {
     using dspace_wrapper=detail::wrapper_helper<hid_t, H5Sclose>;
     using dset_wrapper=detail::wrapper_helper<hid_t, H5Dclose>;
     using plist_wrapper=detail::wrapper_helper<hid_t, H5Pclose>;
+
+    inline void check_error(herr_t err) {
+        if (err<0) throw std::runtime_error("HDF5 call failed");
+    }
 }
