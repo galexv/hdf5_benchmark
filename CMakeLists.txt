@@ -13,11 +13,11 @@ add_library(mydeps INTERFACE)
 target_link_libraries(mydeps INTERFACE ${HDF5_LIBRARIES} ${ALPSCore_LIBRARIES})
 target_include_directories(mydeps INTERFACE ${HDF5_INCLUDE_DIRS})
 
-add_executable(single_proc single_proc.cpp)
-target_link_libraries(single_proc mydeps)
+macro(add_my_exec tgt)
+    add_executable(${tgt} "${tgt}.cpp")
+    target_link_libraries(${tgt} mydeps)
+endmacro()
 
-add_executable(several_proc several_proc.cpp)
-target_link_libraries(several_proc mydeps)
-
-add_executable(several_proc_rows several_proc_rows.cpp)
-target_link_libraries(several_proc_rows mydeps)
+foreach(tgt single_proc several_proc several_proc_rows several_proc_blocks)
+    add_my_exec(${tgt})
+endforeach()
