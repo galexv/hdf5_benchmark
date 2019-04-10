@@ -8,10 +8,6 @@
 #include <alps/params.hpp>
 #include "h5_cxx_interface.hpp"
 
-// FIXME: TEST
-struct some_struct {};
-
-
 int main (int argc, char **argv)
 {
     MPI_Info info  = MPI_INFO_NULL;
