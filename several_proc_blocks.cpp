@@ -77,7 +77,10 @@ int main (int argc, char **argv)
     auto memspace = h5::dspace_wrapper(H5Screate_simple(mem_sz.size(), mem_sz.data(), nullptr));
 
     // Initialize data buffer
-    dvec_t data(mem_sz[0], 10+comm.rank());
+    dvec_t data(mem_sz[0]);
+    for (dvec_t::iterator it=data.begin(); it!=data.end(); ++it) {
+        *it = 1000*(comm.rank()+1) + (it-data.begin());
+    }
 
 
     // Select hyperslab in the file.
