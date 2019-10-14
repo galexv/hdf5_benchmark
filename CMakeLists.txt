@@ -7,10 +7,11 @@ if (NOT HDF5_IS_PARALLEL)
   message(FATAL_ERROR "This package requires parallel HDF5")
 endif()
 
-find_package(ALPSCore REQUIRED params)
+#find_package(ALPSCore REQUIRED params)
+add_subdirectory(dependencies/ALPSCore_reduced)
 
 add_library(mydeps INTERFACE)
-target_link_libraries(mydeps INTERFACE ${HDF5_LIBRARIES} ${ALPSCore_LIBRARIES})
+target_link_libraries(mydeps INTERFACE ${HDF5_LIBRARIES} alps)
 target_include_directories(mydeps INTERFACE ${HDF5_INCLUDE_DIRS})
 
 macro(add_my_exec tgt)

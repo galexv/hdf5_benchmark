@@ -247,6 +247,8 @@ function(add_this_package)
     endif()
   endif(ALPS_HAVE_MPI)
 
+  target_link_libraries(${PROJECT_NAME} PUBLIC ${${PROJECT_NAME}_DEPENDS})
+  
   string(REPLACE "alps-" "" upcase_project_name_ ${PROJECT_NAME})
   string(TOUPPER ${upcase_project_name_} upcase_project_name_)
   set(ALPS_HAVE_ALPS_${upcase_project_name_} 1 CACHE INTERNAL "")
@@ -257,8 +259,8 @@ function(add_this_package)
           ARCHIVE DESTINATION lib
           INCLUDES DESTINATION include)
   target_link_libraries(alps INTERFACE ${PROJECT_NAME})
-  install(EXPORT ${PROJECT_NAME} NAMESPACE alps:: DESTINATION share/${PROJECT_NAME})
-  target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/include ${PROJECT_BINARY_DIR}/include)
+  # install(EXPORT ${PROJECT_NAME} NAMESPACE alps:: DESTINATION share/${PROJECT_NAME})
+  target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include ${PROJECT_BINARY_DIR}/include)
 
   install(DIRECTORY include DESTINATION .
           FILES_MATCHING PATTERN "*.hpp" PATTERN "*.hxx"
