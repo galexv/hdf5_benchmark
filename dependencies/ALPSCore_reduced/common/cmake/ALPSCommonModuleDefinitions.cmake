@@ -257,14 +257,14 @@ function(add_this_package)
           EXPORT ${PROJECT_NAME} 
           LIBRARY DESTINATION lib
           ARCHIVE DESTINATION lib
-          INCLUDES DESTINATION include)
+          #[[INCLUDES DESTINATION include]])
   target_link_libraries(alps INTERFACE ${PROJECT_NAME})
   # install(EXPORT ${PROJECT_NAME} NAMESPACE alps:: DESTINATION share/${PROJECT_NAME})
   target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR}/include ${PROJECT_BINARY_DIR}/include)
 
-  install(DIRECTORY include DESTINATION .
-          FILES_MATCHING PATTERN "*.hpp" PATTERN "*.hxx"
-         )
+  #install(DIRECTORY include DESTINATION .
+  #        FILES_MATCHING PATTERN "*.hpp" PATTERN "*.hxx"
+  #       )
 endfunction(add_this_package)
 
 macro(add_testing)
@@ -287,13 +287,13 @@ endmacro(gen_documentation)
 
 function(gen_main_hpp_config)
   configure_file("${PROJECT_SOURCE_DIR}/utilities/include/config.hpp.in" "${PROJECT_BINARY_DIR}/utilities/include/alps/config.hpp")
-  install(FILES "${PROJECT_BINARY_DIR}/utilities/include/alps/config.hpp" DESTINATION include/alps) 
+  # install(FILES "${PROJECT_BINARY_DIR}/utilities/include/alps/config.hpp" DESTINATION include/alps) 
 endfunction(gen_main_hpp_config)
 
 macro(gen_pkg_config)
   # Generate pkg-config file
   configure_file("${PROJECT_SOURCE_DIR}/${PROJECT_NAME}.pc.in" "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.pc")
-  install(FILES "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.pc" DESTINATION "lib/pkgconfig")
+  # install(FILES "${PROJECT_BINARY_DIR}/${PROJECT_NAME}.pc" DESTINATION "lib/pkgconfig")
 endmacro(gen_pkg_config)
 
 # Function: generates main ALPSCore config
@@ -302,8 +302,8 @@ function(gen_cfg_main)
                  "${PROJECT_BINARY_DIR}/stage/ALPSCoreConfig.cmake" @ONLY)
   configure_file("${PROJECT_SOURCE_DIR}/common/cmake/ALPSCoreConfigVersion.cmake.in" 
                  "${PROJECT_BINARY_DIR}/stage/ALPSCoreConfigVersion.cmake" @ONLY)
-  install(FILES "${PROJECT_BINARY_DIR}/stage/ALPSCoreConfig.cmake" DESTINATION "share/ALPSCore/")
-  install(FILES "${PROJECT_BINARY_DIR}/stage/ALPSCoreConfigVersion.cmake" DESTINATION "share/ALPSCore/")
+  #install(FILES "${PROJECT_BINARY_DIR}/stage/ALPSCoreConfig.cmake" DESTINATION "share/ALPSCore/")
+  #install(FILES "${PROJECT_BINARY_DIR}/stage/ALPSCoreConfigVersion.cmake" DESTINATION "share/ALPSCore/")
 endfunction()
 
 
@@ -329,5 +329,5 @@ function(gen_cfg_module)
     endif()
     configure_file("${PROJECT_SOURCE_DIR}/../common/cmake/ALPSModuleConfig.cmake.in" 
                    "${PROJECT_BINARY_DIR}/stage/${PROJECT_NAME}Config.cmake" @ONLY)
-    install(FILES "${PROJECT_BINARY_DIR}/stage/${PROJECT_NAME}Config.cmake" DESTINATION "share/${PROJECT_NAME}/")
+    #install(FILES "${PROJECT_BINARY_DIR}/stage/${PROJECT_NAME}Config.cmake" DESTINATION "share/${PROJECT_NAME}/")
 endfunction()

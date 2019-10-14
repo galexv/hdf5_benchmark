@@ -17,6 +17,7 @@ target_include_directories(mydeps INTERFACE ${HDF5_INCLUDE_DIRS})
 macro(add_my_exec tgt)
     add_executable(${tgt} "${tgt}.cpp")
     target_link_libraries(${tgt} mydeps)
+    install(TARGETS ${tgt} RUNTIME DESTINATION "./bin")
 endmacro()
 
 foreach(tgt single_proc several_proc several_proc_rows several_proc_blocks)
