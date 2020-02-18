@@ -8,9 +8,10 @@ if (NOT HDF5_IS_PARALLEL)
 endif()
 
 add_subdirectory(dependencies/cmdline)
+add_subdirectory(dependencies/mpiwrap)
 
 add_library(mydeps INTERFACE)
-target_link_libraries(mydeps INTERFACE ${HDF5_LIBRARIES} cmdline)
+target_link_libraries(mydeps INTERFACE ${HDF5_LIBRARIES} cmdline mpiwrap)
 target_include_directories(mydeps INTERFACE ${HDF5_INCLUDE_DIRS})
 
 macro(add_my_exec tgt)
