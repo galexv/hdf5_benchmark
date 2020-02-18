@@ -8,7 +8,8 @@
 
 #include "h5_cxx_interface.hpp"
 
-#include <alps/params.hpp>
+#include <cmdline.hpp>
+namespace po=program_options;
 
 
 int main(int argc, char** argv)
@@ -20,23 +21,39 @@ int main(int argc, char** argv)
     using std::endl;
     typedef std::vector<double> dvec_t;
 
-    alps::params par(argc, argv);
-    par.define<string>("file", "File name to create").
-        define<size_t>("size", "Data size (MB)").
-        define<string>("name", "double_set", "Data set name");
-
-    if (par.help_requested(cerr) || par.has_missing(cerr)) {
+    auto par = po::parse(argc, argv);
+    if (!par) {
+        cerr << "Usage: " << argv[0]
+             << " file=<filename_to_create> size=<data_size_MB> name=<data_set_name>\n";
         return 1;
     }
 
-    hsize_t datasize=par["size"].as<size_t>()*1024*1024/sizeof(double);
+    auto maybe_datasize = par->get<size_t>("size");
+    if (!maybe_datasize) {
+        cerr << "Invalid or missing datasize\n";
+        return 2;
+    }
+
+    auto maybe_fname=par->get<string>("file");
+    if (!maybe_fname) {
+        cerr << "Invalid or missing file name\n";
+        return 2;
+    }
+
+    auto maybe_dname=par->get<string>("name");
+    if (!maybe_dname) {
+        cerr << "Invalid or missing dataset name\n";
+        return 2;
+    }
+    
+    
+    hsize_t datasize=(*maybe_datasize)*1024*1024/sizeof(double);
     dvec_t data(datasize);
 
     // TODO: fill the data with random numbers
 
     // make the file
-    string fname=par["file"].as<string>();
-    h5::fd_wrapper file_id{ H5Fcreate(fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT) };
+    h5::fd_wrapper file_id{ H5Fcreate(maybe_fname->c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT) };
 
     // make the dataspace: 1D array of dimension datasize
     std::array<hsize_t,1> dims={datasize};
@@ -44,8 +61,7 @@ int main(int argc, char** argv)
 
     // make dataset: in this file, with this name, IEEE 64-bit FP, little-endian,
     //               of the dimensions specified by the dataspace
-    string dname=par["name"].as<string>();
-    h5::dset_wrapper dataset_id{ H5Dcreate2(file_id, dname.c_str(), H5T_IEEE_F64LE, dataspace_id,
+    h5::dset_wrapper dataset_id{ H5Dcreate2(file_id, maybe_dname->c_str(), H5T_IEEE_F64LE, dataspace_id,
                                             H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT) };
 
     // write into the dataset: from the whole `double` array to the whole dataset
