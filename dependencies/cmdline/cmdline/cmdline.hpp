@@ -38,13 +38,15 @@ namespace program_options {
         }
     };
 
-    namespace detail {
-        template <typename T>
-        optional<T> make_optional(const T& val)
-        {
-            return optional<T>(val);
-        }
+    template <typename T>
+    optional<T> make_optional(const T& val)
+    {
+        return optional<T>(val);
+    }
 
+
+    
+    namespace detail {
         template <typename T>
         optional<T> try_lexical_cast(const std::string& s) {
             std::istringstream strm(s);
@@ -58,10 +60,10 @@ namespace program_options {
         template <>
         optional<bool> try_lexical_cast(const std::string& s) {
             for (const auto* cval: {"false","FALSE","off","OFF","no","NO","0"}) {
-                if (cval==s) return detail::make_optional(false);
+                if (cval==s) return make_optional(false);
             }
             for (const auto* cval: {"true","TRUE","on","ON","yes","YES","1"}) {
-                if (cval==s) return detail::make_optional(true);
+                if (cval==s) return make_optional(true);
             }
             return optional<bool>();
         }
@@ -89,7 +91,7 @@ namespace program_options {
         optional<T> get_or(const std::string& key, const T& deflt) const
         {
             auto it = map_.find(key);
-            if (it == map_.end()) return detail::make_optional(deflt);
+            if (it == map_.end()) return make_optional(deflt);
             auto maybe_val = detail::try_lexical_cast<T>(it->second);
             return maybe_val;
         }

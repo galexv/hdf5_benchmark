@@ -8,7 +8,7 @@
 
 #include "h5_cxx_interface.hpp"
 
-#include <cmdline.hpp>
+#include <cmdline/cmdline.hpp>
 namespace po=program_options;
 
 

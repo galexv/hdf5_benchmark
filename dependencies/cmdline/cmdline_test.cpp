@@ -1,4 +1,4 @@
-#include "./cmdline.hpp"
+#include "./cmdline/cmdline.hpp"
 #include <gtest/gtest.h>
 
 #include <vector>
