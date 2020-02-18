@@ -6,8 +6,101 @@
 #include <array>
 #include <vector>
 #include <hdf5.h>
-#include <alps/params.hpp>
-#include <alps/utilities/mpi.hpp>
+
+#include <cmdline/cmdline.hpp>
+#include <mpiwrap/mpiwrap.hpp>
+
+namespace po=program_options;
+namespace mpi=mpiwrap;
+
+struct my_params {
+    std::string file;
+    size_t size;
+    std::string name;
+    bool do_collective;
+};
+
+namespace mpiwrap {
+    void bcast(const communicator& comm, const my_params& par, int root)
+    {
+        if (comm.rank()!=root) {
+            throw std::runtime_error("Cannot bcast a const from non-root");
+        }
+        bcast(comm, par.file, root);
+        bcast(comm, par.size, root);
+        bcast(comm, par.name, root);
+        bcast(comm, par.do_collective, root);
+    }
+
+    void bcast(const communicator& comm, my_params& par, int root)
+    {
+        bcast(comm, par.file, root);
+        bcast(comm, par.size, root);
+        bcast(comm, par.name, root);
+        bcast(comm, par.do_collective, root);
+    }
+
+}
+
+
+po::optional<my_params> parse_and_bcast(int argc, const char* const* argv,
+                                        const mpi::communicator& comm)
+{
+    const po::optional<my_params> empty;
+    const int master=0;
+    if (comm.rank()==master) {
+        auto par = po::parse(argc, argv);
+        mpi::bcast(comm, bool(par), master);
+        if (!par) {
+            std::cerr << "Usage: " << argv[0]
+                      << " file=<file_name> size=<data_size_MB> name=<dataset_name> collective=<yes|no>"
+                      << std::endl;
+            return empty;
+        }
+
+        auto maybe_collective = par->get<bool>("collective");
+        if (!maybe_collective) {
+            std::cerr << "collective parameter is missing or invalid\n";
+            return empty;
+        }
+
+        auto maybe_file = par->get<std::string>("file");
+        if (!maybe_file) {
+            std::cerr << "file parameter is missing or invalid\n";
+            return empty;
+        }
+
+        auto maybe_size = par->get<std::size_t>("size");
+        if (!maybe_size) {
+            std::cerr << "size parameter is missing or invalid\n";
+            return empty;
+        }
+        
+        auto maybe_name = par->get<std::string>("name");
+        if (!maybe_size) {
+            std::cerr << "name parameter is missing or invalid\n";
+            return empty;
+        }
+
+        const my_params my_par = {
+            *maybe_file,
+            *maybe_size,
+            *maybe_name,
+            *maybe_collective
+        };
+        mpi::bcast(comm, my_par, master);
+        return po::make_optional(my_par);
+    }
+
+    bool ok;
+    mpi::bcast(comm, ok, master);
+    if (!ok) return empty;
+    
+    my_params my_par;
+    mpi::bcast(comm, my_par, master);
+    return po::make_optional(my_par);
+}
+
 
 int main(int argc, char** argv)
 {
@@ -18,26 +111,31 @@ int main(int argc, char** argv)
     using std::endl;
     typedef std::vector<double> dvec_t;
 
-    alps::mpi::environment env(argc, argv);
-    alps::mpi::communicator comm;
+    mpi::environment env(argc, argv);
+    mpi::communicator comm;
     const int master=0;
     bool is_master = comm.rank()==master;
 
+    const auto maybe_par = parse_and_bcast(argc, argv, comm);
+    if (!maybe_par) return 2;
+    const auto& par = *maybe_par;
 
-    alps::params par(argc, argv, comm);
-    par
-        .define<string>("file", "File name to create")
-        .define<size_t>("size", "Data size (MB)")
-        .define<string>("name", "double_set", "Data set name")
-        .define("collective", "Whether to use collective write")
-        ;
-
-    if (par.help_requested(cerr) || par.has_missing(cerr)) {
-        return 1;
+    // DEBUG:
+    for (int r=0; r<comm.size(); ++r) {
+        if (comm.rank()==r) {
+            cout << std::boolalpha
+                 << "Rank " << r << " is running with"
+                 << " file=" << par.file
+                 << " size=" << par.size
+                 << " name=" << par.name
+                 << " collective=" << par.do_collective
+                 << std::endl;
+        }
+        comm.barrier();
     }
-
-    const bool do_collective=par["collective"];
-    hsize_t datasize=par["size"].as<size_t>()*1024*1024/sizeof(double);
+    
+    
+    hsize_t datasize=par.size*1024*1024/sizeof(double);
     dvec_t data(datasize, comm.rank());
 
     // TODO: fill the data with random numbers
@@ -51,8 +149,7 @@ int main(int argc, char** argv)
     H5Pset_fapl_mpio(plist_id, comm, MPI_INFO_NULL);
 
     // make the file (collectively!)
-    string fname=par["file"].as<string>();
-    auto file_id = H5Fcreate(fname.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
+    auto file_id = H5Fcreate(par.file.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id);
 
 
     // make the dataspace: 1D array of dimension datasize
@@ -66,7 +163,7 @@ int main(int argc, char** argv)
     size_t nsets=comm.size();
     std::vector<hid_t> dsets(nsets);
     for (size_t i=0; i<nsets; ++i) {
-        string dname=par["name"].as<string>()+std::to_string(i);
+        string dname=par.name+std::to_string(i);
         dsets[i] = H5Dcreate2(file_id, dname.c_str(), H5T_IEEE_F64LE, dataspace_id,
                               H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
         // cerr << "Rank " << comm.rank() << ": dsets[" << i << "]=" << dsets[i] << endl;
@@ -76,7 +173,7 @@ int main(int argc, char** argv)
     // make the data-transfer property
     auto plist_xfer_id=H5Pcreate(H5P_DATASET_XFER);
     // set this property to independent or collective IO
-    const auto mode = do_collective? H5FD_MPIO_COLLECTIVE : H5FD_MPIO_INDEPENDENT;
+    const auto mode = par.do_collective? H5FD_MPIO_COLLECTIVE : H5FD_MPIO_INDEPENDENT;
     H5Pset_dxpl_mpio(plist_xfer_id, mode);
 
     // write into the dataset:
