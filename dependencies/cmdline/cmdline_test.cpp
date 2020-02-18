@@ -19,12 +19,22 @@ struct program_options_Test: public ::testing::Test {
     
 };
 
+
 TEST_F(program_options_Test, wrongParams) {
     static const char* argv[] = {"program.x", "something", "a_number=1111",
                                  "an_option=false", "a_string=hello"};
     const int argc = sizeof(argv)/sizeof(*argv);
     auto maybe_params = po::parse(argc, argv);
-    EXPECT_FALSE(maybe_params);
+    EXPECT_FALSE(bool(maybe_params));
+}
+
+TEST_F(program_options_Test, derefParams) {
+    static const char* argv[] = {"program.x", "a_number=1111"};
+    const int argc = sizeof(argv)/sizeof(*argv);
+    auto maybe_params = po::parse(argc, argv);
+    ASSERT_TRUE(bool(maybe_params));
+    auto maybe_number = maybe_params->get<int>("a_number");
+    EXPECT_EQ(1111,*maybe_number);
 }
 
 

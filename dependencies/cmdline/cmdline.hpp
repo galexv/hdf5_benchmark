@@ -25,6 +25,12 @@ namespace program_options {
             if (!valid_) throw std::runtime_error("dereferencing an empty optional");
             return val_;
         }
+
+        const T* operator->() const
+        {
+            if (!valid_) throw std::runtime_error("dereferencing an empty optional");
+            return &val_;
+        }
     };
 
     namespace detail {
