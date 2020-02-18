@@ -5,8 +5,108 @@
 
 #include <vector>
 #include <string>
-#include <alps/params.hpp>
+#include <mpiwrap/mpiwrap.hpp>
+#include <cmdline/cmdline.hpp>
+
 #include "h5_cxx_interface.hpp"
+
+namespace po=program_options;
+namespace mpi=mpiwrap;
+
+struct my_params {
+    std::string file_name;
+    std::size_t nrows;
+    std::size_t ncols;
+    std::string data_name;
+    bool do_collective;
+};
+
+namespace mpiwrap {
+    void bcast(const communicator& comm, const my_params& par, int root)
+    {
+        if (comm.rank()!=root) {
+            throw std::runtime_error("Cannot bcast a const from non-root");
+        }
+        bcast(comm, par.file_name, root);
+        bcast(comm, par.nrows, root);
+        bcast(comm, par.ncols, root);
+        bcast(comm, par.data_name, root);
+        bcast(comm, par.do_collective, root);
+    }
+
+    void bcast(const communicator& comm, my_params& par, int root)
+    {
+        bcast(comm, par.file_name, root);
+        bcast(comm, par.nrows, root);
+        bcast(comm, par.ncols, root);
+        bcast(comm, par.data_name, root);
+        bcast(comm, par.do_collective, root);
+    }
+
+}
+
+
+po::optional<my_params> parse_and_bcast(int argc, const char* const* argv,
+                                        const mpi::communicator& comm)
+{
+    const po::optional<my_params> empty;
+    const int master=0;
+    if (comm.rank()==master) {
+        auto par = po::parse(argc, argv);
+        if (!par) {
+            std::cerr << "Usage: " << argv[0]
+                      << " file=<file_name> rows=<number> cols=<number> [name=<dataset_name>] collective=<yes|no>"
+                      << std::endl;
+            return empty;
+        }
+
+        auto maybe_collective = par->get<bool>("collective");
+        if (!maybe_collective) {
+            std::cerr << "collective parameter is missing or invalid\n";
+            return empty;
+        }
+
+        auto maybe_file = par->get<std::string>("file");
+        if (!maybe_file) {
+            std::cerr << "file parameter is missing or invalid\n";
+            return empty;
+        }
+
+        auto maybe_rows = par->get<std::size_t>("rows");
+        if (!maybe_rows) {
+            std::cerr << "rows parameter is missing or invalid\n";
+            return empty;
+        }
+        
+        auto maybe_cols = par->get<std::size_t>("cols");
+        if (!maybe_cols) {
+            std::cerr << "cols parameter is missing or invalid\n";
+            return empty;
+        }
+        
+        auto maybe_name = par->get_or("name", "double_set");
+        if (!maybe_name) {
+            std::cerr << "name parameter is missing or invalid\n";
+            return empty;
+        }
+
+        const my_params my_par = {
+            *maybe_file,
+            *maybe_rows,
+            *maybe_cols,
+            *maybe_name,
+            *maybe_collective
+        };
+        mpi::bcast(comm, my_par, master);
+        return po::make_optional(my_par);
+    }
+
+    my_params my_par;
+    mpi::bcast(comm, my_par, master);
+    return po::make_optional(my_par);
+}
+
+
 
 int main (int argc, char **argv)
 {
@@ -19,33 +119,33 @@ int main (int argc, char **argv)
     using std::endl;
     typedef std::vector<double> dvec_t;
 
-    alps::mpi::environment env(argc, argv);
-    alps::mpi::communicator comm;
+    mpi::environment env(argc, argv);
+    mpi::communicator comm;
     const int master=0;
     bool is_master = comm.rank()==master;
 
+    const auto maybe_par = parse_and_bcast(argc, argv, comm);
+    if (!maybe_par) {
+        env.abort(3);
+        return 3;
+    }
+    const auto& par = *maybe_par;
 
-    alps::params par(argc, argv, comm);
-    par
-        .define<string>("file", "File name to create")
-        // .define<size_t>("size", "Data size (MB)")
-        .define<size_t>("rows", "Number of rows")
-        .define<size_t>("cols", "Number of columns")
-        .define<string>("name", "double_set", "Data set name")
-        .define("collective", "Whether to use collective write")
-        ;
-
-    if (par.help_requested(cerr) || par.has_missing(cerr)) {
-        return 1;
+    // DEBUG:
+    for (int r=0; r<comm.size(); ++r) {
+        if (comm.rank()==r) {
+            cout << std::boolalpha
+                 << "Rank " << r << " is running with"
+                 << " file_name=" << par.file_name
+                 << " (rows,cols)=(" << par.nrows << ", " << par.ncols
+                 << ") data_name=" << par.data_name
+                 << " collective=" << par.do_collective
+                 << std::endl;
+        }
+        comm.barrier();
     }
 
-    const bool do_collective=par["collective"];
-    const size_t nrows=par["rows"];
-    const size_t ncols=par["cols"];
-    const string file_name=par["file"];
-    const string data_name=par["name"];
-
-
+    
     /*
      * Set up file access property list with parallel I/O access
      */
@@ -55,20 +155,20 @@ int main (int argc, char **argv)
     /*
      * Create a new file collectively and release property list identifier.
      */
-    auto file_id = h5::fd_wrapper(H5Fcreate(file_name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id));
+    auto file_id = h5::fd_wrapper(H5Fcreate(par.file_name.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, plist_id));
     plist_id.close();
 
 
     /*
      * Create the dataspace for the dataset.
      */
-    std::array<hsize_t,2> dims={nrows, ncols};
+    std::array<hsize_t,2> dims={par.nrows, par.ncols};
     auto filespace = h5::dspace_wrapper(H5Screate_simple(dims.size(), dims.data(), nullptr));
 
     /*
      * Create the dataset with default properties
      */
-    auto dset_id = h5::dset_wrapper(H5Dcreate(file_id, data_name.c_str(),
+    auto dset_id = h5::dset_wrapper(H5Dcreate(file_id, par.data_name.c_str(),
                                               H5T_NATIVE_DOUBLE, filespace,
                                               H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT));
     //AG: let's NOT close it:
@@ -98,7 +198,7 @@ int main (int argc, char **argv)
      * Create property list for collective dataset write.
      */
     auto xfer_plist_id = h5::plist_wrapper(H5Pcreate(H5P_DATASET_XFER));
-    H5Pset_dxpl_mpio(xfer_plist_id, do_collective? H5FD_MPIO_COLLECTIVE:H5FD_MPIO_INDEPENDENT);
+    H5Pset_dxpl_mpio(xfer_plist_id, par.do_collective? H5FD_MPIO_COLLECTIVE:H5FD_MPIO_INDEPENDENT);
 
     /*
       Write the data
