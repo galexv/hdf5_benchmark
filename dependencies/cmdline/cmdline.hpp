@@ -19,6 +19,11 @@ namespace program_options {
         {
             return valid_;
         }
+
+        bool operator !() const
+        {
+            return !bool(*this);
+        }
         
         const T& operator*() const
         {
