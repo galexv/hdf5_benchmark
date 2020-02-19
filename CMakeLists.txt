@@ -1,6 +1,12 @@
 project(H5Benchmark C CXX)
 cmake_minimum_required(VERSION 3.1)
 
+option(ENABLE_TESTING "Enable compilation of test programs" NO)
+
+if (NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+endif()
+
 set(HDF5_PREFER_PARALLEL true)
 find_package(HDF5 REQUIRED C)
 if (NOT HDF5_IS_PARALLEL)
