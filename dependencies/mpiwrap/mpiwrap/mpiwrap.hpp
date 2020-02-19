@@ -3,6 +3,7 @@
 #include <mpi.h>
 #include <type_traits>
 #include <cstdint>
+#include <stdexcept>
 
 namespace mpiwrap {
 

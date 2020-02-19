@@ -31,7 +31,7 @@ add_library(alps INTERFACE)
 option(DocumentationOnly "Build only documentation, no code or tests" OFF)
 mark_as_advanced(DocumentationOnly)
 
-option(Documentation "Build documentation" ON)
+option(Documentation "Build documentation" OFF)
 if (DocumentationOnly)
   set(Documentation ON)
 endif (DocumentationOnly)

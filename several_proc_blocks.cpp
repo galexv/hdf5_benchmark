@@ -4,6 +4,7 @@
 
 #include <vector>
 #include <string>
+#include <iostream>
 
 #include <mpiwrap/mpiwrap.hpp>
 #include <cmdline/cmdline.hpp>
